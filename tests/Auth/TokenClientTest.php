@@ -10,6 +10,7 @@ use Elevate\Exception\TokenRequestException;
 use Elevate\Exception\TransportException;
 use Elevate\Exception\UnexpectedResponseException;
 use Elevate\Http\HttpClientException;
+use Elevate\Tests\AssertsTraces;
 use Elevate\Tests\FixedClock;
 use Elevate\Tests\Keys;
 use Elevate\Tests\RecordingHttpClient;
@@ -20,6 +21,8 @@ use PHPUnit\Framework\TestCase;
 
 final class TokenClientTest extends TestCase
 {
+    use AssertsTraces;
+
     private const int NOW = 1_800_000_000;
     private const string AUTH_URL = 'https://auth.example.test';
     private const string API_URL = 'https://api.example.test';
@@ -301,23 +304,6 @@ final class TokenClientTest extends TestCase
             self::fail('The refresh did not throw.');
         } catch (UnexpectedResponseException $exception) {
             self::assertTraceOmits($exception, 'secret-refresh-token', 'secret-access-token');
-        }
-    }
-
-    private static function assertTraceOmits(\Throwable $exception, string ...$secrets): void
-    {
-        $strings = [];
-        $arguments = array_column($exception->getTrace(), 'args');
-        array_walk_recursive($arguments, static function (mixed $argument) use (&$strings): void {
-            if (\is_string($argument)) {
-                $strings[] = $argument;
-            }
-        });
-        self::assertNotEmpty($arguments, 'The trace carries no arguments.');
-        foreach ($secrets as $secret) {
-            foreach ($strings as $string) {
-                self::assertStringNotContainsString($secret, $string);
-            }
         }
     }
 

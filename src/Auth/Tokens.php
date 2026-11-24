@@ -20,4 +20,14 @@ final readonly class Tokens
         public array $scopes,
     ) {
     }
+
+    /**
+     * Omits the tokens: var_dump and print_r print what this method returns.
+     *
+     * @return array{expiresAt: \DateTimeImmutable, scopes: list<string>}
+     */
+    public function __debugInfo(): array
+    {
+        return ['expiresAt' => $this->expiresAt, 'scopes' => $this->scopes];
+    }
 }

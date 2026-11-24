@@ -28,7 +28,7 @@ $tokenClient = new TokenClient($config);
 - The private key is an RSA key or a P-256 key in PEM format.
 - The `authUrl` and `apiUrl` arguments select another environment.
 - The SDK sends its requests with `curl`. To use your own HTTP client, pass an `Elevate\Http\HttpClient` to
-  `TokenClient`.
+  `TokenClient` and `ApiClient`.
 
 ## Start the authorization
 
@@ -51,21 +51,45 @@ $connection = $tokenClient->exchangeCode($code, $redirectUri, $codeVerifier);
 
 $connection->resourceType;          // 'team'
 $connection->resourceId;            // the id of the team that the user connected
-$connection->tokens->accessToken;
-$connection->tokens->refreshToken;  // store it for this user and resource
-$connection->tokens->expiresAt;     // DateTimeImmutable
+$connection->tokens;                // accessToken, refreshToken, expiresAt and scopes: store all four
 ```
 
-## Refresh the access token
+## Call the API
+
+`ApiClient` calls the API for one connection. It takes the stored tokens and a function that stores new ones:
 
 ```php
-$tokens = $tokenClient->refresh($storedRefreshToken);
+use Elevate\Api\ApiClient;
+use Elevate\Auth\Tokens;
 
-// Replace the stored refresh token with $tokens->refreshToken.
+$apiClient = new ApiClient($config, $storedTokens, function (#[\SensitiveParameter] Tokens $tokens) use ($store): void {
+    $store->replace($userId, $teamId, $tokens);
+});
+
+$team = $apiClient->teams->getTeam($teamId);
+$team->name;
 ```
 
-- Each refresh returns a new refresh token, and the previous one stops working after 60 seconds.
-- Run one refresh at a time for each user and resource.
+- The operations are grouped by the tags of the API specification: `teams`, `projects`, `media` and `auth`. They
+  take and return the objects in `Elevate\Api\Model`.
+- `ApiClient` refreshes the access token before it expires and when the API answers 401. It then calls the function
+  with the new tokens.
+- The function must store the tokens before it returns: the previous refresh token stops working after 60 seconds.
+  If the function throws, read the tokens from `$apiClient->tokens()`.
+- Run one refresh at a time for each connection.
+- A failed refresh throws from the call. See [Errors](#errors).
+- A response holds an enum value as a string, so that a new value in the API does not break the SDK. Compare it as
+  in `$status->status === IngestStatus::Completed->value`.
+
+## Refresh without `ApiClient`
+
+To send your own API requests, refresh with `TokenClient`:
+
+```php
+$tokens = $tokenClient->refresh($storedTokens->refreshToken);
+
+// Replace the stored tokens with $tokens.
+```
 
 ## Errors
 
@@ -74,8 +98,10 @@ Every exception implements `Elevate\Exception\ElevateException`.
 | Exception | Meaning | Action |
 | --- | --- | --- |
 | `TokenRequestException` | elevate.io refused the token request. `error` holds the OAuth2 error code and `statusCode` the HTTP status. | <ul><li>`isInvalidGrant()` on a refresh: the connection is revoked. Discard the refresh token and offer a reconnect.</li><li>Treat a `statusCode` of 500 or more as a `TransportException`.</li></ul> |
-| `TransportException` | The request failed in transit. | <ul><li>Retry a refresh within 60 seconds, with the same refresh token.</li><li>Do not retry a code exchange: start a new authorization.</li></ul> |
-| `UnexpectedResponseException` | The response is not a token response. `statusCode` holds the HTTP status. | <ul><li>Treat a `statusCode` of 500 or more as a `TransportException`.</li><li>Report any other status to elevate.io.</li></ul> |
+| `ApiException` | The API refused the request. `errorCode` holds the error code and `statusCode` the HTTP status. | <ul><li>`isNotGranted()`: the connection does not cover the resource, or the user revoked it. Keep the refresh token until a refresh fails with `isInvalidGrant()`.</li><li>`isPlanNotEligible()`: tell the user and keep the refresh token.</li><li>`isInvalidToken()`: report it to elevate.io.</li><li>Show `actionUrl` to the user when it is set.</li><li>Retry a `statusCode` of 500 or more with backoff.</li></ul> |
+| `ValidationException` | The request is invalid. `errors` holds the `path` and the `code` of each invalid part. | Correct the request. |
+| `TransportException` | The request failed in transit. | <ul><li>Retry an API call with backoff.</li><li>Retry a refresh within 60 seconds, with the same refresh token.</li><li>Do not retry a code exchange: start a new authorization.</li></ul> |
+| `UnexpectedResponseException` | The SDK cannot read the response. `statusCode` holds the HTTP status. | <ul><li>Treat a `statusCode` of 500 or more as a `TransportException`.</li><li>Report any other status to elevate.io.</li></ul> |
 
 ## Example
 
@@ -89,3 +115,13 @@ composer test
 composer analyse
 composer style
 ```
+
+### Generated code
+
+`src/Api/Operations.php`, `src/Api/Operations` and `src/Api/Model` are generated from `openapi/openapi-spec.yaml`. Do
+not edit them.
+
+- `composer generate` writes them again.
+- `ELEVATE_SPEC_URL=... composer sync-spec` fetches the specification from the URL, then generates.
+- CI fails when the committed code differs from the generated code.
+- The generator, `generator/Generator.php`, throws on a construct that it does not support, such as `allOf`.
