@@ -81,6 +81,27 @@ final readonly class TokenClient
     }
 
     /**
+     * Obtains a new access token and a new refresh token.
+     *
+     * The refresh token is single use: store the returned one in its place. elevate.io accepts the previous refresh
+     * token for 60 seconds more: retry a refresh that fails with a TransportException within that time, with the same
+     * token.
+     *
+     * @throws TokenRequestException       when elevate.io refuses the refresh; `isInvalidGrant()` means the
+     *                                     connection is revoked
+     * @throws TransportException          when the request fails in transit, or elevate.io answers with a status of
+     *                                     500 or more
+     * @throws UnexpectedResponseException when the response is not a token response
+     */
+    public function refresh(#[\SensitiveParameter] string $refreshToken): Tokens
+    {
+        return $this->tokens($this->request([
+            'grant_type' => 'refresh_token',
+            'refresh_token' => $refreshToken,
+        ]));
+    }
+
+    /**
      * @param array<string, string> $parameters
      *
      * @return array<string, mixed>
