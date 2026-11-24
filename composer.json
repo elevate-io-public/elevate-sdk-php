@@ -16,14 +16,20 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "Elevate\\Tests\\": "tests/"
+            "Elevate\\Tests\\": "tests/",
+            "Elevate\\Generator\\": "generator/"
         }
     },
     "scripts": {
         "test": "phpunit",
         "analyse": "phpstan analyse --no-progress",
         "style": "php-cs-fixer check --diff",
-        "style-fix": "php-cs-fixer fix"
+        "style-fix": "php-cs-fixer fix",
+        "generate": "php bin/generate.php",
+        "sync-spec": [
+            "curl --fail --silent --show-error \"$ELEVATE_SPEC_URL\" --output openapi/openapi-spec.yaml",
+            "@generate"
+        ]
     },
     "config": {
         "sort-packages": true
@@ -31,6 +37,7 @@
     "require-dev": {
         "friendsofphp/php-cs-fixer": "^3.95",
         "phpstan/phpstan": "^2.3",
-        "phpunit/phpunit": "^12.5"
+        "phpunit/phpunit": "^12.5",
+        "symfony/yaml": "^7.2"
     }
 }
