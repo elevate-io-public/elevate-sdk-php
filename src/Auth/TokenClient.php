@@ -15,10 +15,13 @@ use Elevate\Http\HttpClientException;
 use Elevate\Http\Request;
 
 /**
- * Calls the elevate.io token endpoint as the integrator's OAuth2 client.
+ * Builds the authorization request and calls the elevate.io token endpoint as the integrator's OAuth2 client.
  */
 final readonly class TokenClient
 {
+    // Always requested: exchangeCode needs the ID token from `openid` and the refresh token from `offline_access`.
+    private const array REQUIRED_SCOPES = ['openid', 'offline_access'];
+
     private HttpClient $httpClient;
     private Clock $clock;
     private ClientAssertionSigner $signer;
@@ -33,6 +36,37 @@ final readonly class TokenClient
         $this->clock = $clock ?? new SystemClock();
         $this->signer = new ClientAssertionSigner($config, $this->clock);
         $this->idTokenReader = new IdTokenReader($config, $this->clock);
+    }
+
+    /**
+     * Builds the authorization request that connects a resource of the user to the integrator.
+     *
+     * Store the state and the code verifier in the user's session. When the redirect arrives, compare its `state`
+     * query parameter with the stored state before the code exchange.
+     *
+     * @param string       $redirectUri a redirect URI that is registered for the client
+     * @param list<string> $scopes      the resource selection scope and the API scopes, such as `select:team` and
+     *                                  `teams:read`; the request always includes `openid` and `offline_access`
+     */
+    public function authorizationRequest(string $redirectUri, array $scopes): AuthorizationRequest
+    {
+        $state = self::base64Url(random_bytes(16));
+        $codeVerifier = self::base64Url(random_bytes(32));
+
+        return new AuthorizationRequest(
+            $this->config->authUrl.'/oauth2/auth?'.http_build_query([
+                'response_type' => 'code',
+                'client_id' => $this->config->clientId,
+                'redirect_uri' => $redirectUri,
+                'scope' => implode(' ', array_unique(array_filter([...self::REQUIRED_SCOPES, ...$scopes], static fn (string $name): bool => '' !== $name))),
+                'audience' => $this->config->apiUrl,
+                'state' => $state,
+                'code_challenge' => self::base64Url(hash('sha256', $codeVerifier, true)),
+                'code_challenge_method' => 'S256',
+            ], encoding_type: \PHP_QUERY_RFC3986),
+            $state,
+            $codeVerifier,
+        );
     }
 
     /**
@@ -134,6 +168,11 @@ final readonly class TokenClient
         }
 
         return array_filter($decoded, \is_string(...), \ARRAY_FILTER_USE_KEY);
+    }
+
+    private static function base64Url(string $bytes): string
+    {
+        return rtrim(strtr(base64_encode($bytes), '+/', '-_'), '=');
     }
 
     /**

@@ -22,6 +22,7 @@ final class TokenClientTest extends TestCase
 {
     private const int NOW = 1_800_000_000;
     private const string AUTH_URL = 'https://auth.example.test';
+    private const string API_URL = 'https://api.example.test';
     private const string CLIENT_ID = 'client-id';
 
     private static string $privateKey;
@@ -38,7 +39,7 @@ final class TokenClientTest extends TestCase
         JWT::$timestamp = self::NOW;
         $this->httpClient = new RecordingHttpClient();
         $this->tokenClient = new TokenClient(
-            new Config(self::CLIENT_ID, self::$privateKey, 'key-id', self::AUTH_URL),
+            new Config(self::CLIENT_ID, self::$privateKey, 'key-id', self::AUTH_URL, self::API_URL),
             $this->httpClient,
             clock: FixedClock::at(self::NOW),
         );
@@ -47,6 +48,44 @@ final class TokenClientTest extends TestCase
     protected function tearDown(): void
     {
         JWT::$timestamp = null;
+    }
+
+    public function testBuildsAnAuthorizationRequestWithPkceAndState(): void
+    {
+        $request = $this->tokenClient->authorizationRequest('https://integrator.example.test/callback', ['select:team', 'teams:read']);
+
+        self::assertStringStartsWith(self::AUTH_URL.'/oauth2/auth?', $request->url);
+        parse_str((string) parse_url($request->url, \PHP_URL_QUERY), $query);
+        self::assertSame([
+            'response_type' => 'code',
+            'client_id' => self::CLIENT_ID,
+            'redirect_uri' => 'https://integrator.example.test/callback',
+            'scope' => 'openid offline_access select:team teams:read',
+            'audience' => self::API_URL,
+            'state' => $request->state,
+            'code_challenge' => rtrim(strtr(base64_encode(hash('sha256', $request->codeVerifier, true)), '+/', '-_'), '='),
+            'code_challenge_method' => 'S256',
+        ], $query);
+        self::assertStringContainsString('scope=openid%20offline_access%20select%3Ateam%20teams%3Aread', $request->url);
+        self::assertMatchesRegularExpression('/\A[A-Za-z0-9_-]{22}\z/', $request->state);
+        self::assertMatchesRegularExpression('/\A[A-Za-z0-9_-]{43}\z/', $request->codeVerifier);
+    }
+
+    public function testDropsARepeatedScopeAndAnEmptyScope(): void
+    {
+        $request = $this->tokenClient->authorizationRequest('https://integrator.example.test/callback', ['openid', '', 'teams:read']);
+
+        parse_str((string) parse_url($request->url, \PHP_URL_QUERY), $query);
+        self::assertSame('openid offline_access teams:read', $query['scope']);
+    }
+
+    public function testEachAuthorizationRequestHasItsOwnStateAndVerifier(): void
+    {
+        $first = $this->tokenClient->authorizationRequest('https://integrator.example.test/callback', []);
+        $second = $this->tokenClient->authorizationRequest('https://integrator.example.test/callback', []);
+
+        self::assertNotSame($first->state, $second->state);
+        self::assertNotSame($first->codeVerifier, $second->codeVerifier);
     }
 
     public function testExchangesACodeForTokensAndTheConnectedResource(): void
