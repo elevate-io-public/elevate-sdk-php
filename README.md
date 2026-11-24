@@ -124,4 +124,6 @@ not edit them.
 - `composer generate` writes them again.
 - `ELEVATE_SPEC_URL=... composer sync-spec` fetches the specification from the URL, then generates.
 - CI fails when the committed code differs from the generated code.
+- The Specification workflow compares the pinned specification with the one that production serves on each working
+  day. It opens a pull request when they differ, or an issue where the organisation forbids that.
 - The generator, `generator/Generator.php`, throws on a construct that it does not support, such as `allOf`.
