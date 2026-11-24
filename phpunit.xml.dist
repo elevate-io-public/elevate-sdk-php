@@ -13,6 +13,9 @@
             <directory>tests</directory>
         </testsuite>
     </testsuites>
+    <php>
+        <ini name="zend.exception_ignore_args" value="0"/>
+    </php>
     <source>
         <include>
             <directory>src</directory>
