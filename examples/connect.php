@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /*
  * Runs the connect flow from a terminal: prints the authorization URL, takes the redirect URL that the browser
- * ends on, exchanges the code and refreshes once.
+ * ends on, exchanges the code, reads the connected team and shows a refresh.
  *
  * Usage:
  *   ELEVATE_CLIENT_ID=... ELEVATE_KEY_ID=... ELEVATE_PRIVATE_KEY_FILE=private.pem \
@@ -13,7 +13,9 @@ declare(strict_types=1);
  * ELEVATE_AUTH_URL, ELEVATE_API_URL and ELEVATE_SCOPE override the production defaults.
  */
 
+use Elevate\Api\ApiClient;
 use Elevate\Auth\TokenClient;
+use Elevate\Auth\Tokens;
 use Elevate\Config;
 
 require __DIR__.'/../vendor/autoload.php';
@@ -72,6 +74,23 @@ echo "\nConnected {$connection->resourceType} {$connection->resourceId}.\n";
 echo 'Scopes: '.implode(' ', $connection->tokens->scopes)."\n";
 echo 'The access token expires at '.$connection->tokens->expiresAt->format(\DATE_ATOM).".\n";
 
-$tokens = $tokenClient->refresh($connection->tokens->refreshToken);
-echo 'Refreshed. The new access token expires at '.$tokens->expiresAt->format(\DATE_ATOM).".\n";
-echo 'The refresh token '.($tokens->refreshToken === $connection->tokens->refreshToken ? 'did not change' : 'changed').".\n";
+// An integrator stores the tokens for the user and the resource here, in place of the previous ones.
+$store = static function (#[SensitiveParameter] Tokens $tokens): void {
+    echo 'Refreshed. The new access token expires at '.$tokens->expiresAt->format(\DATE_ATOM).".\n";
+};
+
+$apiClient = new ApiClient($config, $connection->tokens, $store);
+$team = $apiClient->teams->getTeam($connection->resourceId);
+echo "The connected team is \"{$team->name}\".\n";
+
+// Passes the tokens as expired, so that the next call refreshes first.
+$expired = new Tokens(
+    $apiClient->tokens()->accessToken,
+    $apiClient->tokens()->refreshToken,
+    new DateTimeImmutable('-1 minute'),
+    $apiClient->tokens()->scopes,
+);
+$apiClient = new ApiClient($config, $expired, $store);
+$team = $apiClient->teams->getTeam($connection->resourceId);
+echo "After the refresh, the connected team is still \"{$team->name}\".\n";
+echo 'The refresh token '.($apiClient->tokens()->refreshToken === $connection->tokens->refreshToken ? 'did not change' : 'changed').".\n";
