@@ -1,0 +1,986 @@
+openapi: 3.0.3
+info:
+  title: elevate public API
+  description: |
+    The API that integrators call on behalf of elevate users
+  version: 0.2.1
+tags:
+  - name: info
+    description: The routes that describe the service
+  - name: teams
+    description: The connected team
+  - name: projects
+    description: The projects in the connected team
+  - name: media
+    description: Media ingest into the connected team
+  - name: auth
+    description: The integrator's connection
+paths:
+  /about:
+    get:
+      description: Get info about the service versions
+      operationId: getAbout
+      tags:
+        - info
+      security: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AboutResult'
+        '500':
+          $ref: '#/components/responses/ErrorResponse'
+  /docs:
+    get:
+      description: Get the OpenAPI specification of this API
+      operationId: getDocs
+      tags:
+        - info
+      security: []
+      responses:
+        '200':
+          description: Success
+          content:
+            text/plain:
+              schema:
+                type: string
+        '500':
+          $ref: '#/components/responses/ErrorResponse'
+  /health:
+    get:
+      description: Get the service's status
+      operationId: getHealth
+      tags:
+        - info
+      security: []
+      responses:
+        '200':
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResult'
+        '500':
+          $ref: '#/components/responses/ErrorResponse'
+  /v1/teams/{teamId}:
+    get:
+      description: Get the details of the team
+      operationId: getTeam
+      tags:
+        - teams
+      security:
+        - oauth2:
+            - teams:read
+      parameters:
+        - $ref: '#/components/parameters/TeamId'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Team'
+        '400':
+          $ref: '#/components/responses/ValidationErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /v1/teams/{teamId}/projects:
+    get:
+      description: |
+        List the projects in the team that the user can access, with the user's permissions on each.
+        With the role parameter, the list holds only the projects where the user has at least that role.
+      operationId: listProjects
+      tags:
+        - projects
+      security:
+        - oauth2:
+            - projects:read
+      parameters:
+        - $ref: '#/components/parameters/TeamId'
+        - in: query
+          name: role
+          required: false
+          description: The minimum role. EDITOR returns only the projects that the user can add media to.
+          schema:
+            $ref: '#/components/schemas/ProjectRole'
+        - in: query
+          name: limit
+          description: The maximum number of projects to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - in: query
+          name: after
+          description: |
+            A cursor to fetch the next page of projects. Pass the nextCursor from the previous response.
+            The cursor is opaque.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListProjectsResponse'
+        '400':
+          $ref: '#/components/responses/ValidationErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      description: Create a project in the team. The user becomes its editor.
+      operationId: createProject
+      tags:
+        - projects
+      security:
+        - oauth2:
+            - projects:write
+      parameters:
+        - $ref: '#/components/parameters/TeamId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectWithPermissions'
+        '400':
+          $ref: '#/components/responses/ValidationErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /v1/teams/{teamId}/media/ingest-init:
+    post:
+      description: |
+        Start ingesting one file into the team. The response carries the media ID and a presigned URL for every
+        part. PUT each part of the file to its URL, then complete the ingest.
+        elevate.io checks the user's storage quota against sizeBytes before it accepts any bytes.
+      operationId: initMediaIngest
+      tags:
+        - media
+      security:
+        - oauth2:
+            - media:write
+      parameters:
+        - $ref: '#/components/parameters/TeamId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InitMediaIngestRequest'
+      responses:
+        '201':
+          description: Started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InitMediaIngestResponse'
+        '400':
+          $ref: '#/components/responses/ValidationErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '402':
+          $ref: '#/components/responses/PaymentRequired'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /v1/teams/{teamId}/media/{mediaId}/ingest-status:
+    get:
+      description: Get the status of the media's ingest
+      operationId: getMediaIngestStatus
+      tags:
+        - media
+      security:
+        - oauth2:
+            - media:write
+      parameters:
+        - $ref: '#/components/parameters/TeamId'
+        - $ref: '#/components/parameters/MediaId'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaIngestStatus'
+        '400':
+          $ref: '#/components/responses/ValidationErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /v1/teams/{teamId}/media/{mediaId}/ingest-complete:
+    post:
+      description: |
+        Complete the ingest once every part is uploaded. elevate.io then processes the file.
+        Poll the ingest status until it is COMPLETED or FAILED.
+      operationId: completeMediaIngest
+      tags:
+        - media
+      security:
+        - oauth2:
+            - media:write
+      parameters:
+        - $ref: '#/components/parameters/TeamId'
+        - $ref: '#/components/parameters/MediaId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteMediaIngestRequest'
+      responses:
+        '200':
+          description: Completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaIngestStatus'
+        '400':
+          $ref: '#/components/responses/ValidationErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /v1/teams/{teamId}/media/{mediaId}/ingest-parts:
+    get:
+      description: |
+        List the parts that elevate.io already holds for an ingest in progress.
+        A client resuming an interrupted upload skips these parts and uploads only the rest.
+      operationId: listMediaIngestParts
+      tags:
+        - media
+      security:
+        - oauth2:
+            - media:write
+      parameters:
+        - $ref: '#/components/parameters/TeamId'
+        - $ref: '#/components/parameters/MediaId'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListMediaIngestPartsResponse'
+        '400':
+          $ref: '#/components/responses/ValidationErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IngestNotResumable'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /v1/teams/{teamId}/media/{mediaId}/ingest-part-urls:
+    post:
+      description: |
+        Create fresh presigned URLs for a range of parts.
+        Use it when the URLs from ingest-init expire while the upload is in progress.
+      operationId: createMediaIngestPartUrls
+      tags:
+        - media
+      security:
+        - oauth2:
+            - media:write
+      parameters:
+        - $ref: '#/components/parameters/TeamId'
+        - $ref: '#/components/parameters/MediaId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMediaIngestPartUrlsRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateMediaIngestPartUrlsResponse'
+        '400':
+          $ref: '#/components/responses/ValidationErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IngestNotResumable'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /v1/auth/revoke-grant:
+    post:
+      description: |
+        Revoke the grant that the access token names, whatever resource it covers. This disconnects the integrator.
+        Every access token and refresh token issued under the grant stops working.
+      operationId: revokeGrant
+      tags:
+        - auth
+      security:
+        - oauth2: []
+      responses:
+        '204':
+          description: Disconnected
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+components:
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      description: |
+        An access token from the authorization code flow with PKCE. The integrator authenticates to the token
+        endpoint with private_key_jwt. Request the openid, offline_access and select:team scopes alongside the
+        resource scopes, and the https://api.elevate.io audience.
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.elevate.io/oauth2/auth
+          tokenUrl: https://auth.elevate.io/oauth2/token
+          refreshUrl: https://auth.elevate.io/oauth2/token
+          scopes:
+            teams:read: Read the connected team
+            projects:read: List the projects in the connected team
+            projects:write: Create projects in the connected team
+            media:write: Upload media into the connected team
+  schemas:
+    AboutResult:
+      readOnly: true
+      type: object
+      required:
+        - name
+        - version
+      properties:
+        name:
+          type: string
+          description: The name of this service
+        version:
+          type: string
+          description: The semver-compliant version of this service
+    ApplicationError:
+      type: object
+      readOnly: true
+      description: An error returned by the application
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          enum:
+            - BAD_REQUEST
+            - METHOD_NOT_ALLOWED
+            - NOT_FOUND
+            - INTERNAL_ERROR
+            - HTTP_ERROR
+            - CONFLICT
+            - FORBIDDEN
+            - PAYMENT_REQUIRED
+      additionalProperties: true
+    ServiceStatus:
+      type: string
+      enum:
+        - HEALTHY
+        - UNHEALTHY
+    HealthResult:
+      type: object
+      required:
+        - service
+      properties:
+        service:
+          $ref: '#/components/schemas/ServiceStatus'
+    Team:
+      type: object
+      readOnly: true
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+    ValidationError:
+      type: object
+      readOnly: true
+      description: A validation error returned by the application
+      required:
+        - code
+        - path
+      properties:
+        code:
+          type: string
+          description: The application-specific error code
+        path:
+          type: string
+          description: The path in the request that caused the error
+      additionalProperties: true
+    ValidationErrors:
+      type: array
+      description: A collection of validation errors
+      readOnly: true
+      items:
+        $ref: '#/components/schemas/ValidationError'
+    PublicErrorCode:
+      type: string
+      enum:
+        - INVALID_TOKEN
+        - INSUFFICIENT_SCOPE
+        - INTEGRATOR_NOT_GRANTED
+        - PLAN_NOT_ELIGIBLE
+        - PAYMENT_REQUIRED
+        - FORBIDDEN
+        - NOT_FOUND
+        - INGEST_NOT_RESUMABLE
+        - INTERNAL_ERROR
+    PublicError:
+      type: object
+      readOnly: true
+      description: An error returned by a v1 route
+      required:
+        - code
+      properties:
+        code:
+          $ref: '#/components/schemas/PublicErrorCode'
+        message:
+          type: string
+          description: A description of the error for the integrator's logs. Do not show it to the user.
+        actionUrl:
+          type: string
+          format: uri
+          description: |
+            Present when the user can resolve the error in elevate.io. It links to the elevate.io page where the
+            user resolves it. Show the link to the user.
+      additionalProperties: true
+    ProjectRole:
+      type: string
+      description: The user's role on a project. EDITOR includes REVIEWER, and REVIEWER includes VIEWER.
+      enum:
+        - EDITOR
+        - REVIEWER
+        - VIEWER
+    Project:
+      type: object
+      readOnly: true
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+    ProjectPermissions:
+      type: object
+      readOnly: true
+      description: The user's permissions on a project
+      required:
+        - role
+      properties:
+        role:
+          $ref: '#/components/schemas/ProjectRole'
+    ProjectWithPermissions:
+      type: object
+      readOnly: true
+      required:
+        - project
+        - permissions
+      properties:
+        project:
+          $ref: '#/components/schemas/Project'
+        permissions:
+          $ref: '#/components/schemas/ProjectPermissions'
+    ListProjectsResponse:
+      type: object
+      readOnly: true
+      required:
+        - items
+        - hasMoreAfter
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectWithPermissions'
+        hasMoreAfter:
+          type: boolean
+          description: Whether there are more projects to fetch after the last item in the list
+        nextCursor:
+          type: string
+          description: |
+            A cursor to fetch the next page of projects. Pass it as the after parameter of the next request.
+            Present when hasMoreAfter is true.
+    CreateProjectRequest:
+      type: object
+      writeOnly: true
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+    FreetextTagValue:
+      type: object
+      required:
+        - type
+        - value
+      properties:
+        type:
+          type: string
+          enum:
+            - freetext
+        value:
+          type: string
+    KeywordTagValue:
+      type: object
+      required:
+        - type
+        - values
+      properties:
+        type:
+          type: string
+          enum:
+            - keyword
+        values:
+          type: array
+          items:
+            type: string
+    DatetimeTagValue:
+      type: object
+      required:
+        - type
+        - value
+      properties:
+        type:
+          type: string
+          enum:
+            - datetime
+        value:
+          type: string
+          format: date-time
+    BooleanTagValue:
+      type: object
+      required:
+        - type
+        - value
+      properties:
+        type:
+          type: string
+          enum:
+            - boolean
+        value:
+          type: boolean
+    ColourTagValue:
+      type: object
+      required:
+        - type
+        - value
+      properties:
+        type:
+          type: string
+          enum:
+            - colour
+        value:
+          type: string
+          pattern: ^#[0-9a-f]{6}$
+    Coordinates:
+      description: A point in decimal degrees, stored to six decimal places.
+      type: object
+      required:
+        - latitude
+        - longitude
+      properties:
+        latitude:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+    CoordinatesTagValue:
+      type: object
+      required:
+        - type
+        - value
+      properties:
+        type:
+          type: string
+          enum:
+            - coordinates
+        value:
+          $ref: '#/components/schemas/Coordinates'
+    TagValue:
+      type: object
+      writeOnly: true
+      description: The value to store under a tag key, typed by the key's value type.
+      discriminator:
+        propertyName: type
+        mapping:
+          freetext: '#/components/schemas/FreetextTagValue'
+          keyword: '#/components/schemas/KeywordTagValue'
+          datetime: '#/components/schemas/DatetimeTagValue'
+          boolean: '#/components/schemas/BooleanTagValue'
+          colour: '#/components/schemas/ColourTagValue'
+          coordinates: '#/components/schemas/CoordinatesTagValue'
+      oneOf:
+        - $ref: '#/components/schemas/FreetextTagValue'
+        - $ref: '#/components/schemas/KeywordTagValue'
+        - $ref: '#/components/schemas/DatetimeTagValue'
+        - $ref: '#/components/schemas/BooleanTagValue'
+        - $ref: '#/components/schemas/ColourTagValue'
+        - $ref: '#/components/schemas/CoordinatesTagValue'
+    InitMediaIngestRequest:
+      type: object
+      writeOnly: true
+      required:
+        - filename
+        - sizeBytes
+      properties:
+        filename:
+          type: string
+          description: The name of the file. It becomes the media name.
+          minLength: 1
+          maxLength: 255
+        sizeBytes:
+          type: integer
+          format: int64
+          minimum: 1
+          description: The size of the file. elevate.io checks the storage quota against it.
+        projectId:
+          type: string
+          format: uuid
+          description: |
+            The project to add the media to. The user must have edit permission on the project.
+            Omit it to add the media to the team without a project.
+        tags:
+          type: object
+          description: |
+            The tags to store on the media, keyed by tag key ID. elevate.io supplies the tag key IDs.
+            Each value's type must match its key's value type.
+          additionalProperties:
+            $ref: '#/components/schemas/TagValue'
+    PartUrl:
+      type: object
+      readOnly: true
+      required:
+        - partNumber
+        - url
+        - method
+        - headers
+      properties:
+        partNumber:
+          type: integer
+          format: int32
+          description: The part number. The first part is 1.
+        url:
+          type: string
+          format: uri
+          description: The presigned URL to upload the part to
+        method:
+          type: string
+          description: The HTTP method of the upload request
+          enum:
+            - PUT
+        headers:
+          type: object
+          description: The HTTP headers to send with the upload request
+          additionalProperties:
+            type: array
+            items:
+              type: string
+    InitMediaIngestResponse:
+      type: object
+      readOnly: true
+      required:
+        - mediaId
+        - maxChunkSizeBytes
+        - chunkCount
+        - partUrls
+      properties:
+        mediaId:
+          type: string
+          format: uuid
+          description: The media that the ingest creates
+        maxChunkSizeBytes:
+          type: integer
+          format: int64
+          description: |
+            The size of every part except the last. Split the file on these boundaries.
+            A part of a different size corrupts the assembled file.
+        chunkCount:
+          type: integer
+          format: int32
+          description: The number of parts in the upload
+        partUrls:
+          type: array
+          description: A presigned URL for every part, in part number order
+          items:
+            $ref: '#/components/schemas/PartUrl'
+    IngestStatus:
+      type: string
+      description: |
+        - AWAITING_UPLOAD: elevate.io waits for the parts and the ingest-complete call.
+        - INGESTING: elevate.io processes the file.
+        - COMPLETED: the media is ready in the team, and in the project when the ingest named one.
+        - FAILED: the ingest failed. The failure says why.
+      enum:
+        - AWAITING_UPLOAD
+        - INGESTING
+        - COMPLETED
+        - FAILED
+    IngestFailure:
+      type: object
+      readOnly: true
+      description: Why the ingest failed. Present when the status is FAILED.
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          description: The failure code
+        message:
+          type: string
+          description: A description of the failure for the integrator's logs. Do not show it to the user.
+        actionUrl:
+          type: string
+          format: uri
+          description: |
+            Present when the user can resolve the failure in elevate.io. It links to the elevate.io page where the
+            user resolves it. Show the link to the user.
+    MediaIngestStatus:
+      type: object
+      readOnly: true
+      required:
+        - mediaId
+        - status
+      properties:
+        mediaId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/IngestStatus'
+        progressPercentage:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 100
+          description: The ingest progress. Present while the status is INGESTING.
+        failure:
+          $ref: '#/components/schemas/IngestFailure'
+    CompletedPart:
+      type: object
+      writeOnly: true
+      required:
+        - partNumber
+        - eTag
+      properties:
+        partNumber:
+          type: integer
+          format: int32
+        eTag:
+          type: string
+          description: The ETag header from the response to the part's upload request
+    CompleteMediaIngestRequest:
+      type: object
+      writeOnly: true
+      required:
+        - parts
+      properties:
+        parts:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/CompletedPart'
+    UploadedPart:
+      type: object
+      readOnly: true
+      required:
+        - partNumber
+        - eTag
+        - sizeBytes
+      properties:
+        partNumber:
+          type: integer
+          format: int32
+        eTag:
+          type: string
+          description: The ETag that elevate.io holds for the part. Pass it back when completing the ingest.
+        sizeBytes:
+          type: integer
+          format: int64
+    ListMediaIngestPartsResponse:
+      type: object
+      readOnly: true
+      required:
+        - maxChunkSizeBytes
+        - chunkCount
+        - parts
+      properties:
+        maxChunkSizeBytes:
+          type: integer
+          format: int64
+          description: The size of every part except the last. Split the file on these boundaries.
+        chunkCount:
+          type: integer
+          format: int32
+          description: The number of parts in the upload
+        parts:
+          type: array
+          items:
+            $ref: '#/components/schemas/UploadedPart'
+    CreateMediaIngestPartUrlsRequest:
+      type: object
+      writeOnly: true
+      required:
+        - chunkFrom
+        - chunkTo
+      properties:
+        chunkFrom:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 10000
+          description: The first part number of the range, inclusive. The first part is 1.
+        chunkTo:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 10000
+          description: The last part number of the range, inclusive
+    CreateMediaIngestPartUrlsResponse:
+      type: object
+      readOnly: true
+      required:
+        - partUrls
+      properties:
+        partUrls:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartUrl'
+  responses:
+    ErrorResponse:
+      description: An error occurred
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApplicationError'
+    ValidationErrorResponse:
+      description: An error occurred
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationErrors'
+    Unauthorized:
+      description: |
+        The access token is missing, expired or invalid. The code is INVALID_TOKEN.
+        Refresh the access token. When the refresh fails, the user must connect again.
+      headers:
+        WWW-Authenticate:
+          description: Bearer error="invalid_token"
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PublicError'
+    Forbidden:
+      description: |
+        The request is not allowed. The code is one of:
+        - INSUFFICIENT_SCOPE: the access token lacks the route's scope. The WWW-Authenticate header names it.
+        - INTEGRATOR_NOT_GRANTED: the grant does not cover the resource that the request names.
+        - PLAN_NOT_ELIGIBLE: the team's plan does not include this integrator. The actionUrl links to the page where the team changes plan.
+        - FORBIDDEN: the user lacks permission for the operation.
+      headers:
+        WWW-Authenticate:
+          description: Bearer error="insufficient_scope" scope="<required scope>", sent with INSUFFICIENT_SCOPE only
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PublicError'
+    InternalError:
+      description: The request failed inside elevate.io. The code is INTERNAL_ERROR. Retry with backoff.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PublicError'
+    PaymentRequired:
+      description: |
+        The user's storage has no room for the declared size. The code is PAYMENT_REQUIRED.
+        The actionUrl links to the page where the team adds storage.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PublicError'
+    NotFound:
+      description: The resource does not exist, or the user cannot see it. The code is NOT_FOUND.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PublicError'
+    IngestNotResumable:
+      description: |
+        The upload no longer exists in storage, so the ingest cannot resume. The code is INGEST_NOT_RESUMABLE.
+        Start a new ingest and upload the whole file.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PublicError'
+  parameters:
+    TeamId:
+      in: path
+      name: teamId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    MediaId:
+      in: path
+      name: mediaId
+      required: true
+      schema:
+        type: string
+        format: uuid
