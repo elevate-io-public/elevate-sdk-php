@@ -2,6 +2,13 @@
 /.github export-ignore
 /.gitignore export-ignore
 /.php-cs-fixer.dist.php export-ignore
+/bin export-ignore
+/generator export-ignore
+/openapi export-ignore
 /phpstan.neon.dist export-ignore
 /phpunit.xml.dist export-ignore
 /tests export-ignore
+/src/Api/Model/** linguist-generated
+/src/Api/Operations/** linguist-generated
+/src/Api/Operations.php linguist-generated
+/tests/Generator/Expected/** linguist-generated

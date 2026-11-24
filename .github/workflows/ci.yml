@@ -29,6 +29,12 @@ jobs:
           coverage: none
       - run: composer validate --strict
       - run: composer update --no-interaction --no-progress ${{ matrix.dependencies == 'lowest' && '--prefer-lowest' || '' }}
+      - name: Check that the generated code matches the specification
+        run: |
+          composer generate
+          git status --porcelain
+          git diff --exit-code
+          test -z "$(git ls-files --others --exclude-standard)"
       - run: composer style
       - run: composer analyse
       - run: composer test

@@ -1,0 +1,232 @@
+openapi: 3.0.3
+info:
+  title: Generator fixture
+  version: 1.0.0
+tags:
+  - name: books
+    description: |
+      The books on a shelf.
+      A shelf holds any number
+  - name: shelves
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      tags: [info]
+      responses:
+        '200':
+          description: Success
+  /v1/shelves/{shelfId}/books:
+    get:
+      description: |
+        List the books on a shelf.
+        The list is in shelf order
+      operationId: listBooks
+      tags: [books, extra]
+      security:
+        - oauth2:
+            - books:read
+            - shelves:read
+      parameters:
+        - $ref: '#/components/parameters/ShelfId'
+        - in: query
+          name: genre
+          required: true
+          schema:
+            $ref: '#/components/schemas/Genre'
+        - in: query
+          name: condition
+          schema:
+            $ref: '#/components/schemas/Condition'
+        - in: query
+          name: limit
+          schema:
+            type: integer
+        - in: query
+          name: signed
+          schema:
+            type: boolean
+        - in: query
+          name: after
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookList'
+        '400':
+          description: Invalid
+    post:
+      description: Add a book to a shelf
+      operationId: addBook
+      tags: [books, extra]
+      security:
+        - oauth2:
+            - books:write
+      parameters:
+        - $ref: '#/components/parameters/ShelfId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewBook'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Book'
+  /v1/shelves/{shelfId}/books/{bookId}:
+    parameters:
+      - $ref: '#/components/parameters/ShelfId'
+    delete:
+      operationId: removeBook
+      tags: [shelves, extra]
+      parameters:
+        - in: path
+          name: bookId
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Removed
+components:
+  parameters:
+    ShelfId:
+      in: path
+      name: shelfId
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    Genre:
+      type: string
+      description: The genre of a book
+      enum:
+        - FICTION
+        - NON_FICTION
+    Condition:
+      type: string
+      enum:
+        - NEW
+        - USED
+    Unused:
+      type: object
+      properties:
+        name:
+          type: string
+    Author:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+    Book:
+      type: object
+      readOnly: true
+      description: |
+        A book on a shelf.
+
+        It has one author */ and no more.
+      required:
+        - id
+        - pages
+        - author
+        - genre
+        - tags
+        - signed
+      properties:
+        subtitle:
+          type: string
+          description: |
+            The line under the title.
+            Absent when the book has none
+        id:
+          type: string
+          format: uuid
+        pages:
+          type: integer
+        price:
+          type: number
+        signed:
+          type: boolean
+        author:
+          $ref: '#/components/schemas/Author'
+        genre:
+          $ref: '#/components/schemas/Genre'
+        condition:
+          $ref: '#/components/schemas/Condition'
+        cover:
+          $ref: '#/components/schemas/Cover'
+        tags:
+          type: array
+          description: The tags of the book
+          items:
+            type: string
+        translations:
+          type: object
+          description: The translated titles by language, each with its editions
+          additionalProperties:
+            type: array
+            items:
+              type: string
+    BookList:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Book'
+    NewBook:
+      type: object
+      required:
+        - title
+        - genre
+      properties:
+        title:
+          type: string
+        genre:
+          $ref: '#/components/schemas/Genre'
+        author:
+          $ref: '#/components/schemas/Author'
+    Hardcover:
+      type: object
+      required:
+        - kind
+        - jacket
+      properties:
+        kind:
+          type: string
+          enum:
+            - hardcover
+        jacket:
+          type: boolean
+    Paperback:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum:
+            - paperback
+    Cover:
+      description: The cover of a book, by kind
+      discriminator:
+        propertyName: kind
+        mapping:
+          hardcover: '#/components/schemas/Hardcover'
+          paperback: '#/components/schemas/Paperback'
+      oneOf:
+        - $ref: '#/components/schemas/Hardcover'
+        - $ref: '#/components/schemas/Paperback'
