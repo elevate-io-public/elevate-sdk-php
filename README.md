@@ -105,7 +105,7 @@ Every exception implements `Elevate\Exception\ElevateException`.
 
 ## Example
 
-`examples/connect.php` runs the connect flow from a terminal.
+`examples/connect.php` connects a team, reads it and refreshes the tokens, from a terminal.
 
 ## Development
 
