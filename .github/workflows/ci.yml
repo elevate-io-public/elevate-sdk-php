@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  # The Specification workflow starts CI on its pull request: a pull request that a workflow opens does not.
+  workflow_dispatch:
 
 permissions:
   contents: read

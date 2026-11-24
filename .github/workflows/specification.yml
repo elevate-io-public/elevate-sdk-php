@@ -1,0 +1,63 @@
+name: Specification
+
+on:
+  schedule:
+    - cron: '17 6 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  update:
+    name: Update the pinned specification from production
+    runs-on: ubuntu-latest
+    env:
+      BRANCH: specification
+      SPEC_URL: https://api.elevate.io/docs
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Fetch the specification that production serves
+        id: fetch
+        run: |
+          curl --fail --silent --show-error --max-time 30 "$SPEC_URL" --output "$RUNNER_TEMP/deployed.yaml"
+          head --lines 1 "$RUNNER_TEMP/deployed.yaml" | grep --quiet '^openapi: 3' || { echo "The response is not an OpenAPI specification."; exit 1; }
+          cp "$RUNNER_TEMP/deployed.yaml" openapi/openapi-spec.yaml
+          if git diff --quiet; then
+            echo "The pinned specification is current."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Generate the code
+        if: steps.fetch.outputs.changed == 'true'
+        run: docker run --rm --volume "$PWD":/app --workdir /app composer:2 sh -c 'composer update --no-interaction --no-progress && composer generate'
+      - name: Open or update the pull request
+        if: steps.fetch.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -B "$BRANCH"
+          git add openapi src/Api
+          git commit --message 'Update the API specification'
+          # Replaces the branch: it holds only this workflow's commit.
+          git push --force origin "$BRANCH"
+          open="$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')"
+          if [ -n "$open" ]; then
+            gh workflow run ci.yml --ref "$BRANCH"
+            exit 0
+          fi
+          body='The specification that production serves differs from `openapi/openapi-spec.yaml`. The `specification` branch holds the new specification and the code that `composer generate` writes from it.'
+          if gh pr create --head "$BRANCH" --title 'Update the API specification' --body "$body"; then
+            gh workflow run ci.yml --ref "$BRANCH"
+            exit 0
+          fi
+          # Falls back to an issue: the organisation can forbid a workflow to open a pull request.
+          issue="$(gh issue list --state open --author 'app/github-actions' --search 'in:title "Update the API specification"' --json number --jq '.[].number')"
+          if [ -z "$issue" ]; then
+            gh issue create --title 'Update the API specification' --body "$body Open the pull request: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/compare/$BRANCH?expand=1"
+          fi
