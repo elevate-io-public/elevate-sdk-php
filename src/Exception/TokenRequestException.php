@@ -22,4 +22,13 @@ final class TokenRequestException extends \RuntimeException implements ElevateEx
                 : \sprintf('The token endpoint returned "%s": %s', $error, $errorDescription),
         );
     }
+
+    /**
+     * The code or the refresh token is no longer valid. For a refresh, the user revoked the connection or the
+     * refresh token was already replaced: discard the stored token and offer a reconnect.
+     */
+    public function isInvalidGrant(): bool
+    {
+        return 'invalid_grant' === $this->error;
+    }
 }

@@ -210,6 +210,85 @@ final class TokenClientTest extends TestCase
         }
     }
 
+    public function testRefreshesTheTokens(): void
+    {
+        $this->httpClient->willReturnJson(200, self::tokenResponse(['access_token' => 'next-access-token', 'refresh_token' => 'next-refresh-token']));
+
+        $tokens = $this->tokenClient->refresh('refresh-token');
+
+        self::assertSame('next-access-token', $tokens->accessToken);
+        self::assertSame('next-refresh-token', $tokens->refreshToken);
+        self::assertSame(self::NOW + 3600, $tokens->expiresAt->getTimestamp());
+        self::assertSame(['openid', 'offline_access', 'teams:read'], $tokens->scopes);
+
+        self::assertSame(self::AUTH_URL.'/oauth2/token', $this->httpClient->requests[0]->url);
+        $form = $this->httpClient->lastForm();
+        self::assertSame('refresh_token', $form['grant_type']);
+        self::assertSame('refresh-token', $form['refresh_token']);
+        $this->assertCarriesAClientAssertion($form);
+    }
+
+    public function testReportsARevokedConnectionOnRefresh(): void
+    {
+        $this->httpClient->willReturnJson(400, ['error' => 'invalid_grant']);
+
+        try {
+            $this->tokenClient->refresh('refresh-token');
+            self::fail('The refresh did not throw.');
+        } catch (TokenRequestException $exception) {
+            self::assertTrue($exception->isInvalidGrant());
+            self::assertNull($exception->errorDescription);
+        }
+    }
+
+    public function testDoesNotReportAnotherOAuth2ErrorAsARevokedConnection(): void
+    {
+        $this->httpClient->willReturnJson(401, ['error' => 'invalid_client']);
+
+        try {
+            $this->tokenClient->refresh('refresh-token');
+            self::fail('The refresh did not throw.');
+        } catch (TokenRequestException $exception) {
+            self::assertFalse($exception->isInvalidGrant());
+        }
+    }
+
+    public function testRejectsARefreshResponseWithoutARefreshToken(): void
+    {
+        $this->httpClient->willReturnJson(200, self::tokenResponse(['refresh_token' => null]));
+
+        try {
+            $this->tokenClient->refresh('refresh-token');
+            self::fail('The refresh did not throw.');
+        } catch (UnexpectedResponseException $exception) {
+            self::assertSame('The token response has no refresh token.', $exception->getMessage());
+        }
+    }
+
+    public function testKeepsTheRefreshTokenOutOfTheTraceOfAFailedRequest(): void
+    {
+        $this->httpClient->willThrow(new HttpClientException('connection reset'));
+
+        try {
+            $this->tokenClient->refresh('secret-refresh-token');
+            self::fail('The refresh did not throw.');
+        } catch (TransportException $exception) {
+            self::assertTraceOmits($exception, 'secret-refresh-token');
+        }
+    }
+
+    public function testKeepsTheTokensOutOfTheTraceOfARefreshResponseItCannotRead(): void
+    {
+        $this->httpClient->willReturnJson(200, self::tokenResponse(['access_token' => 'secret-access-token', 'refresh_token' => null]));
+
+        try {
+            $this->tokenClient->refresh('secret-refresh-token');
+            self::fail('The refresh did not throw.');
+        } catch (UnexpectedResponseException $exception) {
+            self::assertTraceOmits($exception, 'secret-refresh-token', 'secret-access-token');
+        }
+    }
+
     private static function assertTraceOmits(\Throwable $exception, string ...$secrets): void
     {
         $strings = [];
