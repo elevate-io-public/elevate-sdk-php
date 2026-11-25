@@ -22,7 +22,8 @@
         }
     },
     "scripts": {
-        "test": "phpunit",
+        "test": "phpunit --testsuite unit",
+        "system-test": "phpunit --testsuite system",
         "analyse": "phpstan analyse --no-progress",
         "style": "php-cs-fixer check --diff",
         "style-fix": "php-cs-fixer fix",
