@@ -26,7 +26,8 @@ $tokenClient = new TokenClient($config);
 ```
 
 - The private key is an RSA key or a P-256 key in PEM format.
-- The `authUrl` and `apiUrl` arguments select another environment.
+- The `authUrl` and `apiUrl` arguments select another environment. Each is an `https` URL. An `http` URL passes only
+  for `localhost`, `127.0.0.1` or `[::1]`, so that the SDK can run against a local test server.
 - The SDK sends its requests with `curl`. To use your own HTTP client, pass an `Elevate\Http\HttpClient` to
   `TokenClient` and `ApiClient`.
 
