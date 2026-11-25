@@ -12,6 +12,6 @@ return (new PhpCsFixer\Config())
     ])
     ->setFinder(
         (new PhpCsFixer\Finder())
-            ->in([__DIR__.'/src', __DIR__.'/tests', __DIR__.'/examples', __DIR__.'/generator', __DIR__.'/bin'])
+            ->in([__DIR__.'/src', __DIR__.'/tests', __DIR__.'/system_tests', __DIR__.'/examples', __DIR__.'/generator', __DIR__.'/bin'])
             ->append([__FILE__])
     );

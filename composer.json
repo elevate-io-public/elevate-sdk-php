@@ -17,6 +17,7 @@
     "autoload-dev": {
         "psr-4": {
             "Elevate\\Tests\\": "tests/",
+            "Elevate\\SystemTests\\": "system_tests/",
             "Elevate\\Generator\\": "generator/"
         }
     },
@@ -36,6 +37,8 @@
     },
     "require-dev": {
         "friendsofphp/php-cs-fixer": "^3.95",
+        "league/openapi-psr7-validator": "^0.24",
+        "nyholm/psr7": "^1.8",
         "phpstan/phpstan": "^2.3",
         "phpunit/phpunit": "^12.5",
         "symfony/yaml": "^7.2"
