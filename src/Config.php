@@ -13,6 +13,7 @@ final readonly class Config
 {
     public const string PRODUCTION_AUTH_URL = 'https://auth.elevate.io';
     public const string PRODUCTION_API_URL = 'https://api.elevate.io';
+    private const array LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
 
     public string $authUrl;
 
@@ -25,8 +26,9 @@ final readonly class Config
      * @param string $clientId   the OAuth2 client id that elevate.io issued
      * @param string $privateKey the PEM-encoded RSA or P-256 private key whose public key the client's JWKS URL serves
      * @param string $keyId      the `kid` of that key in the JWKS
-     * @param string $authUrl    the elevate.io authorization server
-     * @param string $apiUrl     the elevate.io API
+     * @param string $authUrl    the elevate.io authorization server: an https URL, or an http URL of `localhost`,
+     *                           `127.0.0.1` or `[::1]`
+     * @param string $apiUrl     the elevate.io API, with the same rule
      */
     public function __construct(
         public string $clientId,
@@ -42,10 +44,10 @@ final readonly class Config
         if ('' === $keyId) {
             throw new InvalidConfigException('The key id is empty.');
         }
-        if (!self::isHttpsUrl($authUrl)) {
+        if (!self::isSecureUrl($authUrl)) {
             throw new InvalidConfigException('The authorization server URL is not an https URL.');
         }
-        if (!self::isHttpsUrl($apiUrl)) {
+        if (!self::isSecureUrl($apiUrl)) {
             throw new InvalidConfigException('The API URL is not an https URL.');
         }
         $key = openssl_pkey_get_private($privateKey);
@@ -84,9 +86,13 @@ final readonly class Config
         ];
     }
 
-    private static function isHttpsUrl(string $url): bool
+    private static function isSecureUrl(string $url): bool
     {
-        return 'https' === parse_url($url, \PHP_URL_SCHEME) && \is_string(parse_url($url, \PHP_URL_HOST));
+        $scheme = parse_url($url, \PHP_URL_SCHEME);
+        $host = parse_url($url, \PHP_URL_HOST);
+
+        // Takes http for a loopback host: the request does not leave the machine.
+        return \is_string($host) && ('https' === $scheme || ('http' === $scheme && \in_array($host, self::LOOPBACK_HOSTS, true)));
     }
 
     private static function signingAlgorithmOf(\OpenSSLAsymmetricKey $key): string
