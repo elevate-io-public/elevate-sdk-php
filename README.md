@@ -133,6 +133,8 @@ It reads these environment variables:
 | `ELEVATE_E2E_REDIRECT_URI` | A redirect URI of the test client. Nothing has to listen on it. |
 | `ELEVATE_E2E_USER_EMAIL`, `ELEVATE_E2E_USER_PASSWORD` | A verified user who owns one team on a plan that can connect. |
 
+- The End-to-end Tests workflow runs them on each working day and on each push to `main`, with the variables as
+  Actions secrets and variables. Pull requests do not run them: a pull request from a fork gets no secrets.
 - Run one end-to-end test at a time: elevate.io refuses a second connection of the same team.
 - A run that stops between the consent and the code exchange leaves its grant, and has no tokens to revoke it with.
   Ask elevate.io to remove the grant. Until then each run fails with "The user has no team to connect. The states of

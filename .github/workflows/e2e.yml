@@ -1,0 +1,55 @@
+name: End-to-end Tests
+
+on:
+  schedule:
+    - cron: '43 6 * * 1-5'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Runs one at a time: elevate.io refuses a second connection of the test user's team.
+concurrency:
+  group: e2e
+  cancel-in-progress: false
+
+jobs:
+  e2e-test:
+    name: End-to-end Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+          coverage: none
+      - name: Mask the host names
+        env:
+          ELEVATE_E2E_AUTH_URL: ${{ secrets.ELEVATE_E2E_AUTH_URL }}
+          ELEVATE_E2E_API_URL: ${{ secrets.ELEVATE_E2E_API_URL }}
+          ELEVATE_E2E_IDENTITY_API_URL: ${{ secrets.ELEVATE_E2E_IDENTITY_API_URL }}
+        # Masks the bare host: a secret masks only its whole value, and a curl error names the host without the
+        # scheme. Masks the host with its port too, for a message that names both.
+        run: |
+          for url in "$ELEVATE_E2E_AUTH_URL" "$ELEVATE_E2E_API_URL" "$ELEVATE_E2E_IDENTITY_API_URL"; do
+            authority="${url#*://}"
+            authority="${authority%%/*}"
+            echo "::add-mask::$authority"
+            echo "::add-mask::${authority%%:*}"
+          done
+      - run: composer update --no-interaction --no-progress
+      - run: composer e2e-test
+        env:
+          # The hosts are secrets so that the public log masks them.
+          ELEVATE_E2E_AUTH_URL: ${{ secrets.ELEVATE_E2E_AUTH_URL }}
+          ELEVATE_E2E_API_URL: ${{ secrets.ELEVATE_E2E_API_URL }}
+          ELEVATE_E2E_IDENTITY_API_URL: ${{ secrets.ELEVATE_E2E_IDENTITY_API_URL }}
+          ELEVATE_E2E_CLIENT_ID: ${{ vars.ELEVATE_E2E_CLIENT_ID }}
+          ELEVATE_E2E_KEY_ID: ${{ vars.ELEVATE_E2E_KEY_ID }}
+          ELEVATE_E2E_PRIVATE_KEY: ${{ secrets.ELEVATE_E2E_PRIVATE_KEY }}
+          ELEVATE_E2E_REDIRECT_URI: ${{ vars.ELEVATE_E2E_REDIRECT_URI }}
+          ELEVATE_E2E_USER_EMAIL: ${{ vars.ELEVATE_E2E_USER_EMAIL }}
+          ELEVATE_E2E_USER_PASSWORD: ${{ secrets.ELEVATE_E2E_USER_PASSWORD }}
