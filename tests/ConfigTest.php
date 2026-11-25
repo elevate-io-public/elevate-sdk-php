@@ -47,6 +47,45 @@ final class ConfigTest extends TestCase
         new Config('client-id', Keys::ecPrivateKey(), 'key-id', apiUrl: 'http://api.example.test');
     }
 
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function loopbackUrls(): iterable
+    {
+        yield 'localhost' => ['http://localhost:8080'];
+        yield 'IPv4' => ['http://127.0.0.1:8080'];
+        yield 'IPv6' => ['http://[::1]:8080'];
+    }
+
+    #[DataProvider('loopbackUrls')]
+    public function testAcceptsAnHttpUrlOfALoopbackHost(string $url): void
+    {
+        $config = new Config('client-id', Keys::ecPrivateKey(), 'key-id', $url, $url);
+
+        self::assertSame($url.'/oauth2/token', $config->tokenUrl());
+        self::assertSame($url, $config->apiUrl);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function insecureUrls(): iterable
+    {
+        yield 'a host that starts with localhost' => ['http://localhost.example.test'];
+        yield 'a host that ends with a loopback address' => ['http://example.test.127.0.0.1.example.test'];
+        yield 'a loopback host in the user part' => ['http://127.0.0.1@example.test'];
+        yield 'another scheme for a loopback host' => ['ftp://127.0.0.1'];
+    }
+
+    #[DataProvider('insecureUrls')]
+    public function testRejectsAnHttpUrlOfAnotherHost(string $url): void
+    {
+        $this->expectException(InvalidConfigException::class);
+        $this->expectExceptionMessage('The authorization server URL is not an https URL.');
+
+        new Config('client-id', Keys::ecPrivateKey(), 'key-id', $url);
+    }
+
     public function testSignsWithRs256ForAnRsaKey(): void
     {
         $config = new Config('client-id', Keys::rsaPrivateKey(), 'key-id');
