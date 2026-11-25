@@ -4,6 +4,7 @@ parameters:
         - src
         - tests
         - system_tests
+        - e2e_tests
         - examples
         - generator
         - bin
