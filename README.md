@@ -117,6 +117,27 @@ composer analyse
 composer style
 ```
 
+### End-to-end tests
+
+`composer e2e-test` runs the SDK against a deployed elevate.io. A test user signs in over HTTP, connects a team to a
+test client, and the test exchanges the code, reads the team, refreshes and revokes the grant.
+
+It reads these environment variables:
+
+| Variable | Value |
+| --- | --- |
+| `ELEVATE_E2E_AUTH_URL` | The authorization server. |
+| `ELEVATE_E2E_API_URL` | The API. |
+| `ELEVATE_E2E_IDENTITY_API_URL` | The API that serves the consent page. |
+| `ELEVATE_E2E_CLIENT_ID`, `ELEVATE_E2E_KEY_ID`, `ELEVATE_E2E_PRIVATE_KEY` | The test client and its PEM-encoded private key. |
+| `ELEVATE_E2E_REDIRECT_URI` | A redirect URI of the test client. Nothing has to listen on it. |
+| `ELEVATE_E2E_USER_EMAIL`, `ELEVATE_E2E_USER_PASSWORD` | A verified user who owns one team on a plan that can connect. |
+
+- Run one end-to-end test at a time: elevate.io refuses a second connection of the same team.
+- A run that stops between the consent and the code exchange leaves its grant, and has no tokens to revoke it with.
+  Ask elevate.io to remove the grant. Until then each run fails with "The user has no team to connect. The states of
+  the teams: ALREADY_CONNECTED."
+
 ### Generated code
 
 `src/Api/Operations.php`, `src/Api/Operations` and `src/Api/Model` are generated from `openapi/openapi-spec.yaml`. Do

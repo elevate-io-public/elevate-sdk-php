@@ -3,6 +3,7 @@
          xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
          bootstrap="vendor/autoload.php"
          cacheDirectory=".phpunit.cache"
+         defaultTestSuite="unit,system"
          colors="true"
          failOnRisky="true"
          failOnWarning="true"
@@ -14,6 +15,9 @@
         </testsuite>
         <testsuite name="system">
             <directory>system_tests</directory>
+        </testsuite>
+        <testsuite name="e2e">
+            <directory>e2e_tests</directory>
         </testsuite>
     </testsuites>
     <php>
